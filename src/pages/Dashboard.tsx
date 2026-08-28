@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, IndianRupee, Wallet, CreditCard, TrendingUp, TrendingDown, Plus } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { DashboardSummary } from '@/types'
 import { formatCurrency, formatNumber, getToday } from '@/utils/formatters'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -17,7 +18,7 @@ export default function Dashboard() {
   }, [chartRange])
 
   const loadData = async () => {
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const today = getToday()
       const bills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Array<{
         total: number

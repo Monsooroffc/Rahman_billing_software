@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, Printer, Trash2, Search } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { Bill } from '@/types'
 import { formatCurrency, formatDateTime, getDateRange, getToday } from '@/utils/formatters'
 
@@ -19,7 +20,7 @@ export default function Bills() {
 
   const loadBills = async () => {
     const range = getDateRange(filter, customFrom, customTo)
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const browserBills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Bill[]
       const data = browserBills.filter(bill => {
         const billDate = bill.created_at.slice(0, 10)
@@ -43,7 +44,7 @@ export default function Bills() {
   const handleVoid = async (bill: Bill) => {
     const reason = prompt('Enter reason for voiding bill:')
     if (reason) {
-      if (!window.electronAPI) {
+      if (!window.electronAPI && !hasCloudDatabase) {
         const browserBills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Bill[]
         localStorage.setItem('rahman-browser-bills', JSON.stringify(browserBills.map(item =>
           item.id === bill.id ? { ...item, status: 'VOID', void_reason: reason } : item

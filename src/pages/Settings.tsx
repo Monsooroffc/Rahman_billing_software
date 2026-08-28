@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Download, Upload, Database, Lock, Palette, Printer, Store, ReceiptText, ShieldCheck } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { Settings as SettingsType } from '@/types'
 
 const DEFAULT_SETTINGS: SettingsType = {
@@ -18,7 +19,7 @@ export default function Settings() {
   useEffect(() => { loadSettings() }, [])
 
   const loadSettings = async () => {
-    const s = !window.electronAPI
+    const s = !window.electronAPI && !hasCloudDatabase
       ? { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('rahman-browser-settings') || '{}') }
       : await db.getSettings()
     setSettings(s)
@@ -97,10 +98,10 @@ export default function Settings() {
   const togglePin = async () => {
     if (!form.pin_enabled) {
       if (pin.length < 4) { alert('PIN must be at least 4 digits'); return }
-      if (!window.electronAPI) localStorage.setItem('rahman-browser-settings', JSON.stringify({ ...form, pin_enabled: 1, pin_code: pin }))
+      if (!window.electronAPI && !hasCloudDatabase) localStorage.setItem('rahman-browser-settings', JSON.stringify({ ...form, pin_enabled: 1, pin_code: pin }))
       else await db.updateSettings({ pin_enabled: 1, pin_code: pin })
     } else {
-      if (!window.electronAPI) localStorage.setItem('rahman-browser-settings', JSON.stringify({ ...form, pin_enabled: 0, pin_code: '' }))
+      if (!window.electronAPI && !hasCloudDatabase) localStorage.setItem('rahman-browser-settings', JSON.stringify({ ...form, pin_enabled: 0, pin_code: '' }))
       else await db.updateSettings({ pin_enabled: 0, pin_code: '' })
     }
     loadSettings()

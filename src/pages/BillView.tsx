@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Trash2 } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { Bill, Settings } from '@/types'
 import { formatDateTime } from '@/utils/formatters'
 
@@ -17,7 +18,7 @@ export default function BillView() {
 
   const loadBill = async () => {
     if (!id) return
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const browserBill = (JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Bill[])
         .find(item => item.id === Number(id))
       setBill(browserBill || null)
@@ -53,7 +54,7 @@ export default function BillView() {
     if (!bill) return
     const reason = prompt('Enter reason for voiding:')
     if (reason) {
-      if (!window.electronAPI) {
+      if (!window.electronAPI && !hasCloudDatabase) {
         const browserBills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Bill[]
         localStorage.setItem('rahman-browser-bills', JSON.stringify(browserBills.map(item =>
           item.id === bill.id ? { ...item, status: 'VOID', void_reason: reason } : item

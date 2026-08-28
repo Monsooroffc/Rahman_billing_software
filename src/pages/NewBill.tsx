@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Plus, Minus, Trash2, Printer, Save } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { Service, BillItem, Customer, Settings, Bill } from '@/types'
 
 const PAYMENT_METHODS = [
@@ -80,7 +81,7 @@ export default function NewBill() {
   }, [])
 
   const loadServices = async () => {
-    const s = !window.electronAPI
+    const s = !window.electronAPI && !hasCloudDatabase
       ? (JSON.parse(localStorage.getItem('rahman-browser-services') || '[]') as Service[]).filter(service => service.is_active)
       : await db.getActiveServices()
     setServices(s)
@@ -144,7 +145,7 @@ export default function NewBill() {
       return
     }
 
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const browserBills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]')
       const billNumber = await db.getNextBillNumber()
       const savedBill: Bill = {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Download } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import { formatCurrency, getDateRange, getToday } from '@/utils/formatters'
 import type { PaymentSummary, ServiceReport } from '@/types'
 
@@ -22,7 +23,7 @@ export default function Reports() {
 
   const loadReport = async () => {
     const { from, to } = getDateRange(range, customFrom, customTo)
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const browserBills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Array<{
         total: number
         subtotal: number

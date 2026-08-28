@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { db } from '@/db'
+import { hasCloudDatabase } from '@/db/supabase'
 import type { Service, ServiceCategory } from '@/types'
 
 const DEFAULT_CATEGORIES = ['Xerox', 'Printout', 'ID Card', 'Lamination', 'Scanning', 'Photo', 'Binding', 'Online Services', 'Government Services', 'Other']
@@ -15,7 +16,7 @@ export default function Services() {
   useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const stored = JSON.parse(localStorage.getItem('rahman-browser-services') || '[]') as Service[]
       const names = [...new Set([...DEFAULT_CATEGORIES, ...stored.map(service => service.category_name).filter(Boolean)])] as string[]
       setServices(stored)
@@ -41,7 +42,7 @@ export default function Services() {
       min_rate: formData.min_rate,
     }
 
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const category = categories.find(item => item.id === formData.category_id)
       const stored = JSON.parse(localStorage.getItem('rahman-browser-services') || '[]') as Service[]
       const service: Service = {
@@ -79,7 +80,7 @@ export default function Services() {
 
   const handleDelete = async (id: number) => {
     if (confirm('Delete this service?')) {
-      if (!window.electronAPI) {
+      if (!window.electronAPI && !hasCloudDatabase) {
         const stored = JSON.parse(localStorage.getItem('rahman-browser-services') || '[]') as Service[]
         localStorage.setItem('rahman-browser-services', JSON.stringify(stored.filter(service => service.id !== id)))
       } else await db.deleteService(id)
@@ -88,7 +89,7 @@ export default function Services() {
   }
 
   const toggleActive = async (service: Service) => {
-    if (!window.electronAPI) {
+    if (!window.electronAPI && !hasCloudDatabase) {
       const stored = JSON.parse(localStorage.getItem('rahman-browser-services') || '[]') as Service[]
       localStorage.setItem('rahman-browser-services', JSON.stringify(stored.map(item => item.id === service.id ? { ...item, is_active: service.is_active ? 0 : 1 } : item)))
     } else await db.updateService(service.id, { is_active: service.is_active ? 0 : 1 })
