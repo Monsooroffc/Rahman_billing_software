@@ -616,6 +616,16 @@ export const db = {
   },
 
   async printReceipt(html: string, printerName?: string) {
+    if (!api) {
+      // Web mode — open the receipt in a popup window and use the browser print dialog
+      const receiptWindow = window.open('', '_blank', 'width=420,height=700')
+      if (!receiptWindow) throw new Error('Popup blocked. Allow popups to print the receipt.')
+      receiptWindow.document.write(html)
+      receiptWindow.document.close()
+      receiptWindow.focus()
+      receiptWindow.print()
+      return
+    }
     return api.print.receipt(html, printerName)
   }
 }
