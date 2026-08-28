@@ -304,8 +304,20 @@ export const db = {
       const { data, error } = await supabase!.from('bills').insert({ ...bill, bill_number: billNumber, status: 'COMPLETED' }).select('id').single()
       if (error) throw error
       const billId = data.id as number
-      const { error: itemError } = await supabase!.from('bill_items').insert(items.map(item => ({ ...item, id: undefined, bill_id: billId })))
-      if (itemError) throw itemError
+      const { error: itemError } = await supabase!.from('bill_items').insert(items.map(item => ({
+        bill_id: billId,
+        service_id: item.service_id,
+        service_name_snapshot: item.service_name_snapshot,
+        category_name_snapshot: item.category_name_snapshot,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount
+      })))
+      if (itemError) {
+        // Remove the orphan bill so a failed save doesn't leave half-written data
+        await supabase!.from('bills').delete().eq('id', billId)
+        throw itemError
+      }
       if (bill.customer_id) {
         const { data: customer } = await supabase!.from('customers').select('total_bills,total_spent').eq('id', bill.customer_id).single()
         if (customer) await supabase!.from('customers').update({ total_bills: customer.total_bills + 1, total_spent: Number(customer.total_spent) + Number(bill.total || 0), last_visit: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', bill.customer_id)
