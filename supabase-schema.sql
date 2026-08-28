@@ -200,3 +200,11 @@ create policy "public app access expense categories" on public.expense_categorie
 create policy "public app access expenses" on public.expenses for all using (true) with check (true);
 
 insert into public.settings (id) values (1) on conflict (id) do nothing;
+
+-- Grant the app roles access to all tables (newer Supabase projects do not
+-- auto-grant permissions for tables created via SQL scripts).
+grant usage on schema public to anon, authenticated;
+grant all on all tables in schema public to anon, authenticated;
+grant all on all sequences in schema public to anon, authenticated;
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
