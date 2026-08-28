@@ -1,3 +1,9 @@
 node_modules
 dist
 dist-electron
+release
+
+# Local env files (contain Supabase keys - never commit)
+.env
+.env.local
+.env.*.local

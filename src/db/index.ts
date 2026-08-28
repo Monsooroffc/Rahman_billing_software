@@ -28,8 +28,32 @@ export const db = {
   async getSettings(): Promise<Settings> {
     if (hasCloudDatabase) {
       const { data, error } = await supabase!.from('settings').select('*').eq('id', 1).single()
-      if (error) throw error
-      return data as Settings
+      if (data) return data as Settings
+      if (error && error.code !== 'PGRST116') throw error
+      // Fresh cloud database without a settings row yet — create it with the shop defaults
+      const { data: created, error: insertError } = await supabase!
+        .from('settings')
+        .upsert({
+          id: 1,
+          shop_name: BROWSER_DEFAULT_SETTINGS.shop_name,
+          shop_email: BROWSER_DEFAULT_SETTINGS.shop_email,
+          shop_phone: BROWSER_DEFAULT_SETTINGS.shop_phone || '',
+          shop_address: BROWSER_DEFAULT_SETTINGS.shop_address || '',
+          bill_prefix: BROWSER_DEFAULT_SETTINGS.bill_prefix,
+          starting_number: BROWSER_DEFAULT_SETTINGS.starting_number,
+          default_customer: BROWSER_DEFAULT_SETTINGS.default_customer,
+          receipt_paper_size: BROWSER_DEFAULT_SETTINGS.receipt_paper_size,
+          printer_name: BROWSER_DEFAULT_SETTINGS.printer_name || '',
+          show_email_on_receipt: BROWSER_DEFAULT_SETTINGS.show_email_on_receipt,
+          show_customer_on_receipt: BROWSER_DEFAULT_SETTINGS.show_customer_on_receipt,
+          pin_enabled: BROWSER_DEFAULT_SETTINGS.pin_enabled,
+          pin_code: BROWSER_DEFAULT_SETTINGS.pin_code || '',
+          theme: BROWSER_DEFAULT_SETTINGS.theme
+        })
+        .select('*')
+        .single()
+      if (insertError) throw insertError
+      return created as Settings
     }
     if (!api) return { ...BROWSER_DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(BROWSER_SETTINGS_KEY) || '{}') }
     return api.db.get('SELECT * FROM settings WHERE id = 1')
