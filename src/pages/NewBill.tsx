@@ -235,7 +235,8 @@ export default function NewBill() {
       setSearchQuery('')
       searchRef.current?.focus()
     } catch (err) {
-      alert('Bill could not be saved. Please try again.')
+      const message = (err as { message?: string })?.message || String(err)
+      alert('Bill could not be saved: ' + message)
       console.error(err)
     }
   }
