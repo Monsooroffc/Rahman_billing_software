@@ -61,6 +61,11 @@ export const db = {
   },
 
   async getServices(): Promise<Service[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('services').select('*, service_categories(name), service_price_options(*)').order('display_order').order('name')
+      if (error) throw error
+      return (data || []).map(service => ({ ...service, category_name: service.service_categories?.name, price_options: service.service_price_options || [] })) as Service[]
+    }
     const services = await api.db.all(`
       SELECT s.*, sc.name as category_name 
       FROM services s 
@@ -77,6 +82,11 @@ export const db = {
   },
 
   async getActiveServices(): Promise<Service[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('services').select('*, service_categories(name), service_price_options(*)').eq('is_active', 1).order('display_order').order('name')
+      if (error) throw error
+      return (data || []).map(service => ({ ...service, category_name: service.service_categories?.name, price_options: service.service_price_options || [] })) as Service[]
+    }
     const services = await api.db.all(`
       SELECT s.*, sc.name as category_name 
       FROM services s 
@@ -94,10 +104,23 @@ export const db = {
   },
 
   async getServiceCategories(): Promise<ServiceCategory[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('service_categories').select('*').eq('is_active', 1).order('display_order')
+      if (error) throw error
+      return data as ServiceCategory[]
+    }
     return api.db.all('SELECT * FROM service_categories WHERE is_active = 1 ORDER BY display_order')
   },
 
   async createService(service: Partial<Service>, priceOptions: number[]) {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('services').insert({ category_id: service.category_id, name: service.name, unit: service.unit, default_rate: service.default_rate, min_rate: service.min_rate || 0, is_custom: service.is_custom || 0 }).select('id').single()
+      if (error) throw error
+      const options = priceOptions.map((rate, index) => ({ service_id: data.id, rate, is_default: index === 0 ? 1 : 0 }))
+      const { error: optionError } = await supabase!.from('service_price_options').insert(options)
+      if (optionError) throw optionError
+      return data.id
+    }
     const result = await api.db.run(
       'INSERT INTO services (category_id, name, unit, default_rate, min_rate, is_custom) VALUES (?, ?, ?, ?, ?, ?)',
       [service.category_id, service.name, service.unit, service.default_rate, service.min_rate || 0, service.is_custom || 0]
@@ -113,6 +136,17 @@ export const db = {
   },
 
   async updateService(id: number, service: Partial<Service>, priceOptions?: number[]) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('services').update({ category_id: service.category_id, name: service.name, unit: service.unit, default_rate: service.default_rate, min_rate: service.min_rate, is_active: service.is_active, updated_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      if (priceOptions) {
+        const { error: deleteError } = await supabase!.from('service_price_options').delete().eq('service_id', id)
+        if (deleteError) throw deleteError
+        const { error: optionError } = await supabase!.from('service_price_options').insert(priceOptions.map((rate, index) => ({ service_id: id, rate, is_default: index === 0 ? 1 : 0 })))
+        if (optionError) throw optionError
+      }
+      return
+    }
     await api.db.run(
       'UPDATE services SET category_id = ?, name = ?, unit = ?, default_rate = ?, min_rate = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [service.category_id, service.name, service.unit, service.default_rate, service.min_rate, service.is_active, id]
@@ -129,6 +163,11 @@ export const db = {
   },
 
   async deleteService(id: number) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('services').delete().eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run('DELETE FROM services WHERE id = ?', [id])
   },
 
@@ -335,6 +374,14 @@ export const db = {
   },
 
   async getExpenses(filters?: { from?: string; to?: string }): Promise<Expense[]> {
+    if (hasCloudDatabase) {
+      let query = supabase!.from('expenses').select('*, expense_categories(name)').order('expense_date', { ascending: false })
+      if (filters?.from) query = query.gte('expense_date', filters.from)
+      if (filters?.to) query = query.lte('expense_date', filters.to)
+      const { data, error } = await query
+      if (error) throw error
+      return (data || []).map(expense => ({ ...expense, category_name: expense.expense_categories?.name })) as Expense[]
+    }
     let sql = 'SELECT e.*, ec.name as category_name FROM expenses e LEFT JOIN expense_categories ec ON e.category_id = ec.id WHERE 1=1'
     const params: any[] = []
     if (filters?.from) { sql += ' AND date(e.expense_date) >= date(?)'; params.push(filters.from) }
@@ -344,6 +391,11 @@ export const db = {
   },
 
   async createExpense(expense: Partial<Expense>) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('expenses').insert({ category_id: expense.category_id || null, name: expense.name, amount: expense.amount, payment_method: expense.payment_method, notes: expense.notes, expense_date: expense.expense_date })
+      if (error) throw error
+      return
+    }
     return api.db.run(
       'INSERT INTO expenses (category_id, name, amount, payment_method, notes, expense_date) VALUES (?, ?, ?, ?, ?, ?)',
       [expense.category_id, expense.name, expense.amount, expense.payment_method, expense.notes, expense.expense_date]
@@ -351,6 +403,11 @@ export const db = {
   },
 
   async updateExpense(id: number, expense: Partial<Expense>) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('expenses').update({ category_id: expense.category_id || null, name: expense.name, amount: expense.amount, payment_method: expense.payment_method, notes: expense.notes, expense_date: expense.expense_date }).eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run(
       'UPDATE expenses SET category_id = ?, name = ?, amount = ?, payment_method = ?, notes = ?, expense_date = ? WHERE id = ?',
       [expense.category_id, expense.name, expense.amount, expense.payment_method, expense.notes, expense.expense_date, id]
@@ -358,10 +415,20 @@ export const db = {
   },
 
   async deleteExpense(id: number) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('expenses').delete().eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run('DELETE FROM expenses WHERE id = ?', [id])
   },
 
   async getExpenseCategories(): Promise<ExpenseCategory[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('expense_categories').select('*').eq('is_active', 1).order('name')
+      if (error) throw error
+      return data as ExpenseCategory[]
+    }
     return api.db.all('SELECT * FROM expense_categories WHERE is_active = 1 ORDER BY name')
   },
 
@@ -371,7 +438,10 @@ export const db = {
       const { data: bills, error: billError } = await supabase!.from('bills').select('total,payment_method').eq('status', 'COMPLETED').gte('created_at', `${targetDate}T00:00:00`).lt('created_at', `${targetDate}T23:59:59.999`)
       if (billError) throw billError
       const total = (method?: string) => (bills || []).filter(bill => !method || bill.payment_method === method).reduce((sum, bill) => sum + Number(bill.total), 0)
-      return { today_sales: total(), today_bills: bills?.length || 0, today_cash: total('cash'), today_upi: total('upi'), today_card: total('card'), today_other: total('other'), today_expenses: 0, net_collection: total() }
+      const { data: expenses, error: expenseError } = await supabase!.from('expenses').select('amount').eq('expense_date', targetDate)
+      if (expenseError) throw expenseError
+      const todayExpenses = (expenses || []).reduce((sum, expense) => sum + Number(expense.amount), 0)
+      return { today_sales: total(), today_bills: bills?.length || 0, today_cash: total('cash'), today_upi: total('upi'), today_card: total('card'), today_other: total('other'), today_expenses: todayExpenses, net_collection: total() - todayExpenses }
     }
     const sales = await api.db.get(`
       SELECT 
@@ -403,6 +473,12 @@ export const db = {
   },
 
   async getPaymentSummary(from: string, to: string): Promise<PaymentSummary> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bills').select('total,payment_method').eq('status', 'COMPLETED').gte('created_at', `${from}T00:00:00`).lt('created_at', `${to}T23:59:59.999`)
+      if (error) throw error
+      const amount = (method?: string) => (data || []).filter(bill => !method || bill.payment_method === method).reduce((sum, bill) => sum + Number(bill.total), 0)
+      return { cash: amount('cash'), upi: amount('upi'), card: amount('card'), other: amount('other'), total: amount() }
+    }
     return api.db.get(`
       SELECT 
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total ELSE 0 END), 0) as cash,
@@ -416,6 +492,16 @@ export const db = {
   },
 
   async getServiceReport(from: string, to: string): Promise<ServiceReport[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bill_items').select('service_name_snapshot,category_name_snapshot,quantity,amount,bills!inner(created_at,status)').eq('bills.status', 'COMPLETED').gte('bills.created_at', `${from}T00:00:00`).lt('bills.created_at', `${to}T23:59:59.999`)
+      if (error) throw error
+      const totals = new Map<string, ServiceReport>()
+      for (const item of data || []) {
+        const existing = totals.get(item.service_name_snapshot)
+        totals.set(item.service_name_snapshot, { service_name: item.service_name_snapshot, category_name: item.category_name_snapshot || '', quantity: (existing?.quantity || 0) + Number(item.quantity), total_revenue: (existing?.total_revenue || 0) + Number(item.amount) })
+      }
+      return [...totals.values()].sort((a, b) => b.total_revenue - a.total_revenue)
+    }
     return api.db.all(`
       SELECT 
         service_name_snapshot as service_name,
@@ -431,6 +517,19 @@ export const db = {
   },
 
   async getSalesChartData(range: 'day' | 'week' | 'month'): Promise<{ label: string; sales: number }[]> {
+    if (hasCloudDatabase) {
+      const days = range === 'day' ? 0 : range === 'week' ? 6 : 335
+      const from = new Date(Date.now() - days * 86400000).toISOString()
+      const { data, error } = await supabase!.from('bills').select('total,created_at').eq('status', 'COMPLETED').gte('created_at', from)
+      if (error) throw error
+      const totals = new Map<string, number>()
+      for (const bill of data || []) {
+        const date = new Date(bill.created_at)
+        const label = range === 'day' ? `${String(date.getHours()).padStart(2, '0')}:00` : range === 'week' ? date.toISOString().slice(0, 10) : date.toISOString().slice(0, 7)
+        totals.set(label, (totals.get(label) || 0) + Number(bill.total))
+      }
+      return [...totals.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([label, sales]) => ({ label, sales }))
+    }
     let sql = ''
     if (range === 'day') {
       sql = `
