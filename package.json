@@ -16,6 +16,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@supabase/server": "^1.4.1",
     "@supabase/supabase-js": "^2.112.4",
     "better-sqlite3": "^12.4.1",
     "date-fns": "^3.3.1",
