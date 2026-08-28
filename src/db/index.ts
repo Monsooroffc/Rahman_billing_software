@@ -1,4 +1,5 @@
 import type { Settings, Service, ServiceCategory, ServicePriceOption, Customer, Bill, BillItem, Expense, ExpenseCategory, DashboardSummary, PaymentSummary, ServiceReport } from '@/types'
+import { hasCloudDatabase, supabase } from './supabase'
 
 const api = window.electronAPI
 
@@ -25,11 +26,21 @@ const BROWSER_DEFAULT_SETTINGS: Settings = {
 
 export const db = {
   async getSettings(): Promise<Settings> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('settings').select('*').eq('id', 1).single()
+      if (error) throw error
+      return data as Settings
+    }
     if (!api) return { ...BROWSER_DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(BROWSER_SETTINGS_KEY) || '{}') }
     return api.db.get('SELECT * FROM settings WHERE id = 1')
   },
 
   async updateSettings(settings: Partial<Settings>) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('settings').update(settings).eq('id', 1)
+      if (error) throw error
+      return
+    }
     if (!api) {
       const current = await this.getSettings()
       localStorage.setItem(BROWSER_SETTINGS_KEY, JSON.stringify({ ...current, ...settings }))
@@ -122,11 +133,21 @@ export const db = {
   },
 
   async getCustomers(): Promise<Customer[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('customers').select('*').order('name')
+      if (error) throw error
+      return data as Customer[]
+    }
     if (!api) return JSON.parse(localStorage.getItem('rahman-browser-customers') || '[]')
     return api.db.all('SELECT * FROM customers ORDER BY name')
   },
 
   async searchCustomers(query: string): Promise<Customer[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('customers').select('*').or(`name.ilike.%${query}%,mobile.ilike.%${query}%`).order('name')
+      if (error) throw error
+      return data as Customer[]
+    }
     return api.db.all(
       'SELECT * FROM customers WHERE name LIKE ? OR mobile LIKE ? ORDER BY name',
       [`%${query}%`, `%${query}%`]
@@ -134,6 +155,11 @@ export const db = {
   },
 
   async createCustomer(customer: Partial<Customer>): Promise<number> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('customers').insert({ name: customer.name, mobile: customer.mobile, email: customer.email }).select('id').single()
+      if (error) throw error
+      return data.id
+    }
     if (!api) {
       const customers = await this.getCustomers()
       const created = { ...customer, id: Date.now(), total_bills: 0, total_spent: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Customer
@@ -148,6 +174,11 @@ export const db = {
   },
 
   async updateCustomer(id: number, customer: Partial<Customer>) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('customers').update({ name: customer.name, mobile: customer.mobile, email: customer.email, updated_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run(
       'UPDATE customers SET name = ?, mobile = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [customer.name, customer.mobile, customer.email, id]
@@ -155,10 +186,20 @@ export const db = {
   },
 
   async deleteCustomer(id: number) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('customers').delete().eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run('DELETE FROM customers WHERE id = ?', [id])
   },
 
   async getCustomerBills(customerId: number): Promise<Bill[]> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bills').select('*').eq('customer_id', customerId).eq('status', 'COMPLETED').order('created_at', { ascending: false })
+      if (error) throw error
+      return data as Bill[]
+    }
     return api.db.all(
       'SELECT * FROM bills WHERE customer_id = ? AND status = "COMPLETED" ORDER BY created_at DESC',
       [customerId]
@@ -168,6 +209,14 @@ export const db = {
   async getNextBillNumber(): Promise<string> {
     const settings = await this.getSettings()
     const prefix = settings.bill_prefix || 'RX-'
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bills').select('bill_number').order('id', { ascending: false }).limit(1)
+      if (error) throw error
+      let nextNum = settings.starting_number || 1
+      const lastNumber = data?.[0]?.bill_number?.match(/(\d+)$/)?.[1]
+      if (lastNumber) nextNum = Math.max(nextNum, Number(lastNumber) + 1)
+      return `${prefix}${String(nextNum).padStart(6, '0')}`
+    }
     if (!api) {
       const bills = JSON.parse(localStorage.getItem('rahman-browser-bills') || '[]') as Array<{ bill_number?: string }>
       let nextNum = settings.starting_number || 1
@@ -188,6 +237,18 @@ export const db = {
 
   async createBill(bill: Partial<Bill>, items: BillItem[]): Promise<number> {
     const billNumber = bill.bill_number || (await this.getNextBillNumber())
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bills').insert({ ...bill, bill_number: billNumber, status: 'COMPLETED' }).select('id').single()
+      if (error) throw error
+      const billId = data.id as number
+      const { error: itemError } = await supabase!.from('bill_items').insert(items.map(item => ({ ...item, id: undefined, bill_id: billId })))
+      if (itemError) throw itemError
+      if (bill.customer_id) {
+        const { data: customer } = await supabase!.from('customers').select('total_bills,total_spent').eq('id', bill.customer_id).single()
+        if (customer) await supabase!.from('customers').update({ total_bills: customer.total_bills + 1, total_spent: Number(customer.total_spent) + Number(bill.total || 0), last_visit: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', bill.customer_id)
+      }
+      return billId
+    }
     const result = await api.db.run(
       `INSERT INTO bills (
         bill_number, customer_id, customer_name, customer_mobile, subtotal, discount, total,
@@ -225,6 +286,16 @@ export const db = {
   },
 
   async getBills(filters?: { from?: string; to?: string; status?: string; search?: string }): Promise<Bill[]> {
+    if (hasCloudDatabase) {
+      let query = supabase!.from('bills').select('*').order('created_at', { ascending: false })
+      if (filters?.from) query = query.gte('created_at', `${filters.from}T00:00:00`)
+      if (filters?.to) query = query.lt('created_at', `${filters.to}T23:59:59.999`)
+      if (filters?.status) query = query.eq('status', filters.status)
+      if (filters?.search) query = query.or(`bill_number.ilike.%${filters.search}%,customer_name.ilike.%${filters.search}%,customer_mobile.ilike.%${filters.search}%`)
+      const { data, error } = await query
+      if (error) throw error
+      return data as Bill[]
+    }
     let sql = 'SELECT * FROM bills WHERE 1=1'
     const params: any[] = []
     if (filters?.from) { sql += ' AND date(created_at) >= date(?)'; params.push(filters.from) }
@@ -239,6 +310,11 @@ export const db = {
   },
 
   async getBillById(id: number): Promise<Bill | undefined> {
+    if (hasCloudDatabase) {
+      const { data, error } = await supabase!.from('bills').select('*, bill_items(*)').eq('id', id).single()
+      if (error) return undefined
+      return { ...data, items: data.bill_items } as Bill
+    }
     const bill = await api.db.get('SELECT * FROM bills WHERE id = ?', [id])
     if (bill) {
       bill.items = await api.db.all('SELECT * FROM bill_items WHERE bill_id = ?', [id])
@@ -247,6 +323,11 @@ export const db = {
   },
 
   async voidBill(id: number, reason: string) {
+    if (hasCloudDatabase) {
+      const { error } = await supabase!.from('bills').update({ status: 'VOID', void_reason: reason, voided_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id)
+      if (error) throw error
+      return
+    }
     return api.db.run(
       'UPDATE bills SET status = "VOID", void_reason = ?, voided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [reason, id]
@@ -286,6 +367,12 @@ export const db = {
 
   async getDashboardSummary(date?: string): Promise<DashboardSummary> {
     const targetDate = date || new Date().toISOString().split('T')[0]
+    if (hasCloudDatabase) {
+      const { data: bills, error: billError } = await supabase!.from('bills').select('total,payment_method').eq('status', 'COMPLETED').gte('created_at', `${targetDate}T00:00:00`).lt('created_at', `${targetDate}T23:59:59.999`)
+      if (billError) throw billError
+      const total = (method?: string) => (bills || []).filter(bill => !method || bill.payment_method === method).reduce((sum, bill) => sum + Number(bill.total), 0)
+      return { today_sales: total(), today_bills: bills?.length || 0, today_cash: total('cash'), today_upi: total('upi'), today_card: total('card'), today_other: total('other'), today_expenses: 0, net_collection: total() }
+    }
     const sales = await api.db.get(`
       SELECT 
         COUNT(*) as today_bills,
