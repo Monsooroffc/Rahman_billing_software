@@ -1,16 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-// `vite.config.ts` maps the different Supabase env variable names (VITE_*,
-// SUPABASE_* from the Vercel integration, NEXT_PUBLIC_*) into VITE_SUPABASE_URL
-// and VITE_SUPABASE_ANON_KEY at build time. The extra fallbacks below keep this
-// working in dev mode too, no matter which name is used.
-const env = import.meta.env as Record<string, string | undefined>
+// Cloud database credentials for RAHMAN XEROX & SIFY IWAY.
+// The publishable key is a PUBLIC client credential (safe to embed in the app)
+// and all data access is protected by Row Level Security (RLS) policies.
+// These are hardcoded so the web (Vercel) and desktop (Electron) builds always
+// work without depending on environment variables being configured at build time.
+const SUPABASE_URL = 'https://nmogcjtdxnrormypvxfk.supabase.co'
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_YZAgm5iMFVDzons8StlWvQ_Gj9Qep6a'
 
-const url = env.VITE_SUPABASE_URL || env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL
-const key = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
 
-export const supabase = url && key ? createClient(url, key) : null
-
-// When true, the app stores everything in Supabase. When false it falls back to
-// the local SQLite database (Electron) or browser localStorage (web preview).
-export const hasCloudDatabase = Boolean(supabase)
+export const hasCloudDatabase = true
